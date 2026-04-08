@@ -1,0 +1,152 @@
+library(zoo)
+library("strucchange")
+library(tseries)
+library(readxl)
+
+data <- read_excel("dataforR.xlsx")
+
+# ИНФЛЯЦИЯ
+
+df_p <- data.frame(
+  p = as.numeric(data$p),
+  trend = 1:nrow(data)
+)
+
+p_BP <- breakpoints(p ~ trend, data = df_p, h = 8) # минимальное количество наблюдений между сдвигами. 8, т.к. это 0,1 * 80 (по рекомендации из работы Bai, Perron (1998) - можно брать от 0,05 до 0,15)
+p_BP
+plot(p_BP)
+confint(p_BP)
+
+
+# ВВП
+
+df_Y <- data.frame(
+  Y = as.numeric(data$BusinessClim),
+  trend = 1:nrow(data)
+)
+
+Y_BP <- breakpoints(Y ~ trend, data = df_Y, h = 8) # минимальное количество наблюдений между сдвигами. 8, т.к. это 0,1 * 80 (по рекомендации из работы Bai, Perron (1998) - можно брать от 0,05 до 0,15)
+Y_BP
+plot(Y_BP)
+confint(Y_BP)
+
+
+# КЛЮЧЕВАЯ СТАВКА
+
+df_i <- data.frame(
+  i = as.numeric(data$M2),
+  trend = 1:nrow(data)
+)
+
+i_BP <- breakpoints(i ~ trend, data = df_i, h = 20)
+i_BP
+plot(i_BP)
+confint(i_BP)
+
+
+# БАЛАНС БЮДЖТА
+
+df_B <- data.frame(
+  B = as.numeric(data$Budget),
+  trend = 1:nrow(data)
+)
+
+B_BP <- breakpoints(B ~ trend, data = df_B, h = 20)
+B_BP
+plot(B_BP)
+confint(B_BP)
+
+# ДЛЯ ВСЕЙ СИСТЕМЫ
+
+df <- data.frame(
+  CPI          = as.numeric(data$CPI),
+  ICP          = as.numeric(data$ICP),
+  iMOEX        = as.numeric(data$iMOEX),
+  KeyRate      = as.numeric(data$KeyRate),
+  M2           = as.numeric(data$M2),
+  IPP          = as.numeric(data$IPP),
+  BusinessClim = as.numeric(data$BusinessClim),
+  Retail       = as.numeric(data$Retail),
+  Budget       = as.numeric(data$Budget),
+  Unempl       = as.numeric(data$Unempl),
+  REER         = as.numeric(data$REER),
+  Urals        = as.numeric(data$Urals),
+  EU           = as.numeric(data$EU)
+)
+
+
+endo_vars <- c("CPI", "ICP", "iMOEX", "KeyRate", "M2",
+               "IPP", "BusinessClim", "Retail", "Budget", "Unempl")
+
+exo_vars  <- c("REER", "Urals", "EU")
+
+n_lags <- 4
+
+
+# Создаем лаги 1...6 для всех эндогенных переменных
+
+for (v in endo_vars) {
+  for (L in 1:n_lags) {
+    df[[paste0(v, "_l", L)]] <- c(rep(NA, L), head(df[[v]], -L))
+  }
+}
+
+# убираем первые 6 строк, где лаги не определены
+df_var <- na.omit(df)
+
+
+# Формируем уравнение для инфляции
+
+rhs_lags <- unlist(
+  lapply(endo_vars, function(v) paste0(v, "_l", 1:n_lags))
+)
+
+rhs_all <- c(rhs_lags, exo_vars)
+
+form_CPI <- as.formula(
+  paste("CPI ~", paste(rhs_all, collapse = " + "))
+)
+
+
+bp_CPI <- breakpoints(
+  form_CPI,
+  data = df_var,
+  h = 55
+)
+
+bp_CPI
+plot(bp_CPI)
+confint(bp_CPI)
+
+
+bp_Y <- breakpoints(
+  Y ~ p_l1 + p_l2 + Y_l1 + Y_l2 + i_l1 + i_l2 + B_l1 + B_l2 + poil,
+  data = df_var,
+  h = 12
+)
+
+bp_Y
+plot(bp_Y)
+confint(bp_Y)
+
+
+bp_i <- breakpoints(
+  i ~ p_l1 + p_l2 + Y_l1 + Y_l2 + i_l1 + i_l2 + B_l1 + B_l2 + poil,
+  data = df_var,
+  h = 12
+)
+
+bp_i
+plot(bp_i)
+confint(bp_i)
+
+
+bp_B <- breakpoints(
+  B ~ p_l1 + p_l2 + Y_l1 + Y_l2 + i_l1 + i_l2 + B_l1 + B_l2 + poil,
+  data = df_var,
+  h = 12
+)
+
+bp_B
+plot(bp_B)
+confint(bp_B)
